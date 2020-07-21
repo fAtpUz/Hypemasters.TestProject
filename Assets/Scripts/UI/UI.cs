@@ -12,6 +12,7 @@ public class UI : MonoBehaviour
 
     float tempGlobalTime;
     bool paused = false;
+    bool newGlobalTime = false;
     Text timeCounter;
     Button restart;
     Button pause;
@@ -92,7 +93,11 @@ public class UI : MonoBehaviour
     /// </summary>
     void OnPlay() {
         timeBar.value = 1;
-        if (tempGlobalTime > 0) GlobalTime.Time = tempGlobalTime;
+        if (newGlobalTime)
+        {
+            GlobalTime.Time = tempGlobalTime;
+            newGlobalTime = false;
+        }
         
         Pause();
     }
@@ -129,6 +134,7 @@ public class UI : MonoBehaviour
             EventManager.AddTimeChangeInvoker(this);
             tempGlobalTime = timeStamp;
             timeCounter.text = "Playback time: " + timeStamp.ToString("0.0");
+            newGlobalTime = true;
         }
     }
 

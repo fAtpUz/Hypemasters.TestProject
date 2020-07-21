@@ -102,7 +102,7 @@ public class Unit : MonoBehaviour
     /// so i did this
     /// </summary>
     void StopBodyFromMoving() {
-        thisCollider.enabled = !paused;
+        thisCollider.enabled = enabled == true ? !paused : false;
         thisBody.velocity = Vector3.zero;
         thisBody.useGravity = !paused;
         thisBody.freezeRotation = !paused;
@@ -138,8 +138,12 @@ public class Unit : MonoBehaviour
     void OnTriggerEnter(Collider collider)
     {
         // what happens when Unit reaches the castle / finish
-        if (collider.tag == "Finish")  {
+        if (collider.tag == "Finish") {
             reachedFinish.Invoke(transform);
+            EnableObject(false);
+        }
+        else if (collider.tag == "Fall") {
+            deathEvent.Invoke(transform);
             EnableObject(false);
         }
     }
