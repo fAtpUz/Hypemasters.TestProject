@@ -21,6 +21,13 @@ public class Cannon : MonoBehaviour
 
     List<Transform> targetsInRange = new List<Transform>();
 
+    List<TowerAction> recordedActions = new List<TowerAction>();
+
+    bool paused = false;
+
+    [SerializeField] int recordEveryNFrames = 3;
+    int frame = 3;
+
     #endregion
 
     #region Methods
@@ -32,6 +39,7 @@ public class Cannon : MonoBehaviour
 
         InitializeTimer();
 
+        EventManager.AddPauseTimeListener(Pause);
         EventManager.AddTimeChangeListener(GoToTime);
         EventManager.AddReachedFinishListener(OnTargetLeft);
         EventManager.AddUnitDeadListener(OnTargetLeft);
@@ -39,14 +47,33 @@ public class Cannon : MonoBehaviour
 
     void Update()
     {
-        curDelay -= Time.deltaTime;
-        if (curDelay <= 0) {
-            if (targetsInRange.Count > 0) {
-                RotateTowardsGoal(baseToRotate, targetsInRange[0]);
-                Shoot(targetsInRange[0]);
-                InitializeTimer();
+        if (!paused)
+        {
+            curDelay -= Time.deltaTime;
+            if (curDelay <= 0)
+            {
+                if (targetsInRange.Count > 0)
+                {
+                    RotateTowardsGoal(baseToRotate, targetsInRange[0]);
+                    Shoot(targetsInRange[0]);
+                    InitializeTimer();
+                }
+            }
+
+            // if not paused, record data once every N frames
+            frame--;
+            if (frame <= 0)
+            {
+                RecordState();
+                frame = recordEveryNFrames;
             }
         }
+    }
+
+    void Pause()
+    {
+        RecordState();
+        paused = !paused;
     }
 
     /// <summary>
@@ -90,12 +117,35 @@ public class Cannon : MonoBehaviour
     }
 
     /// <summary>
+    /// Create a new UnitAction and add to list
+    /// </summary>
+    void RecordState()
+    {
+        float t = float.Parse(GlobalTime.Time.ToString("0.0"));
+        recordedActions.Add(new TowerAction(t, baseToRotate.transform.rotation.eulerAngles, curDelay));
+        //print("record at " + t);
+    }
+
+    /// <summary>
     /// changes object parameters to a value, recorded at a time
     /// </summary>
     /// <param name="time">playback time, float</param>
     void GoToTime(float time)
     {
+        TowerAction state = recordedActions.Find(x => x.time == time);
 
+        if (state != null)
+        {
+            baseToRotate.transform.rotation = Quaternion.Euler(state.rotation);
+            curDelay = state.curDelay;
+        }
+        else
+        {
+            // leave as is
+            //
+            // tower is present at the start of the game and will never be disabled
+            // if we need to disable the tower later, must add EnableObject() to the script
+        }
     }
 
     #endregion

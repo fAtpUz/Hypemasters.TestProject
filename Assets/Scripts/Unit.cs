@@ -14,12 +14,20 @@ public class Unit : MonoBehaviour
 
     Transform unitFinishPosition;
 
+    Rigidbody thisBody;
+    Collider thisCollider;
+    Animator thisAnimator;
+
     UnitReachedFinish reachedFinish;
     UnitDied deathEvent;
 
     bool enabled = false;
+    bool paused = false;
 
-    List<UnitAction> recorderActions = new List<UnitAction>();
+    [SerializeField] int recordEveryNFrames = 3;
+    int frame = 3;
+
+    List<UnitAction> recordedActions = new List<UnitAction>();
 
     #endregion
 
@@ -33,9 +41,14 @@ public class Unit : MonoBehaviour
     public void Initialize(Transform unitFinishPosition) {
         this.unitFinishPosition = unitFinishPosition;
 
+        thisBody = GetComponent<Rigidbody>();
+        thisCollider = GetComponent<Collider>();
+        thisAnimator = GetComponent<Animator>();
+
         InitializeEvents();
 
         enabled = true;
+        RecordState();
     }
 
     /// <summary>
@@ -46,6 +59,7 @@ public class Unit : MonoBehaviour
         deathEvent = new UnitDied();
 
         EventManager.AddTimeChangeListener(GoToTime);
+        EventManager.AddPauseTimeListener(Pause);
         EventManager.AddReachedFinishInvoker(this);
         EventManager.AddUnitDeadInvoker(this);
     }
@@ -54,13 +68,45 @@ public class Unit : MonoBehaviour
     {
         if (enabled)
         {
-            float distance = Vector3.Distance(transform.position, unitFinishPosition.position);
-            transform.position = Vector3.Lerp(transform.position, unitFinishPosition.position, (Time.deltaTime * speed) / distance);
-            RotateTowardsGoal();
+            if (!paused)
+            {
+                float distance = Vector3.Distance(transform.position, unitFinishPosition.position);
+                transform.position = Vector3.Lerp(transform.position, unitFinishPosition.position, (Time.deltaTime * speed) / distance);
+                RotateTowardsGoal();
+            }
         }
-        else {
 
+        // if not paused, record data once every N frames
+        if (!paused) {
+            frame--;
+            if (frame <= 0)
+            {
+                RecordState();
+                frame = recordEveryNFrames;
+            }
         }
+    }
+
+    void Pause() {
+        paused = !paused;
+
+        RecordState();
+
+        StopBodyFromMoving();
+
+        thisAnimator.speed = paused == true ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Rotation didn't stop when paused or moving the time
+    /// so i did this
+    /// </summary>
+    void StopBodyFromMoving() {
+        thisCollider.enabled = !paused;
+        thisBody.velocity = Vector3.zero;
+        thisBody.useGravity = !paused;
+        thisBody.freezeRotation = !paused;
+        thisBody.Sleep();
     }
 
     /// <summary>
@@ -85,16 +131,22 @@ public class Unit : MonoBehaviour
         if (healthPoints <= 0)
         {
             deathEvent.Invoke(transform);
-            gameObject.SetActive(false);
+            EnableObject(false);
         }
     }
 
     void OnTriggerEnter(Collider collider)
     {
+        // what happens when Unit reaches the castle / finish
         if (collider.tag == "Finish")  {
             reachedFinish.Invoke(transform);
-            gameObject.SetActive(false);
+            EnableObject(false);
         }
+    }
+
+    void OnBecameInvisible() {
+        deathEvent.Invoke(transform);
+        EnableObject(false);
     }
 
     /// <summary>
@@ -110,16 +162,36 @@ public class Unit : MonoBehaviour
     /// so that towers will know the unit is no more
     /// </summary>
     /// <param name="listener"></param>
-    public void AddUnitDeadListener(UnityAction<Transform> listener)
-    {
+    public void AddUnitDeadListener(UnityAction<Transform> listener) {
         deathEvent.AddListener(listener);
     }
 
     /// <summary>
-    /// Like SetActive(false)
+    /// Like SetActive(), but script is responsive to Events
     /// </summary>
-    void DisableObject() {
+    void EnableObject(bool state) {
+        enabled = state;
+        transform.GetChild(0).gameObject.SetActive(state);
+        //thisCollider.enabled = paused == state ? state : paused;
+        thisCollider.enabled = state;
 
+        if (state) {
+            if (reachedFinish == null) reachedFinish = new UnitReachedFinish();
+            if (deathEvent == null) deathEvent = new UnitDied();
+        }
+
+        if (!state) {
+            deathEvent.Invoke(transform);
+        }
+    }
+
+    /// <summary>
+    /// Create a new UnitAction and add to list
+    /// </summary>
+    void RecordState() {
+        float t = float.Parse(GlobalTime.Time.ToString("0.0"));
+        recordedActions.Add(new UnitAction(t, enabled, transform.position, transform.rotation.eulerAngles, healthPoints));
+        //print("record at " + t);
     }
 
     /// <summary>
@@ -128,7 +200,26 @@ public class Unit : MonoBehaviour
     /// <param name="time">playback time, float</param>
     void GoToTime(float time)
     {
-        Debug.Log(time);
+        //print(gameObject.name + " GoToTime " + time);
+
+        UnitAction state = recordedActions.Find(x => x.time == time);
+
+        //UnitAction state = recordedActions[Mathf.FloorToInt(recordedActions.Count * time)];
+
+        if (state != null)
+        {
+            EnableObject(state.isActive);
+            transform.position = state.position;
+            transform.rotation = Quaternion.Euler(state.rotation);
+            healthPoints = state.HP;
+        }
+        else {
+            // if object doesnt have a recorded state
+            // it means that it didnt exist yet
+            EnableObject(false);
+        }
+
+        StopBodyFromMoving();
     }
 
     #endregion

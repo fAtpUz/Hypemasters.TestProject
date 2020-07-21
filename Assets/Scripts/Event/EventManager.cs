@@ -14,6 +14,9 @@ public static class EventManager
     static UI timeChangeInvoker;
     static List<UnityAction<float>> timeChangeListeners = new List<UnityAction<float>>();
 
+    static UI pauseTimeInvoker;
+    static List<UnityAction> pauseTimeListeners = new List<UnityAction>();
+
     /// <summary>
     /// Add a new invoker (when new unit is spawned)
     /// </summary>
@@ -84,5 +87,29 @@ public static class EventManager
     {
         timeChangeListeners.Add(listener);
         if (timeChangeInvoker != null) timeChangeInvoker.AddTimeChangeListener(listener);
+    }
+
+    /// <summary>
+    /// Add the invoker for pause/unpause
+    /// (we need only one invoker)
+    /// </summary>
+    /// <param name="invoker">UI script</param>
+    public static void AddPauseTimeInvoker(UI invoker)
+    {
+        pauseTimeInvoker = invoker;
+        foreach (UnityAction listener in pauseTimeListeners)
+        {
+            invoker.AddPauseTimeListener(listener);
+        }
+    }
+
+    /// <summary>
+    /// Add listener for pausing / unpausing
+    /// </summary>
+    /// <param name="listener">Cannon, Unit, Bullet</param>
+    public static void AddPauseTimeListener(UnityAction listener)
+    {
+        pauseTimeListeners.Add(listener);
+        if (pauseTimeInvoker != null) pauseTimeInvoker.AddPauseTimeListener(listener);
     }
 }

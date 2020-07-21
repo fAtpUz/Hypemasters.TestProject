@@ -4,12 +4,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 
 public class UI : MonoBehaviour
 {
     #region Fields
 
-    float timePassed;
+    float tempGlobalTime;
+    bool paused = false;
     Text timeCounter;
     Button restart;
     Button pause;
@@ -17,6 +19,7 @@ public class UI : MonoBehaviour
     Scrollbar timeBar;
 
     GoToTimeState timeChangeEvent;
+    PauseEvent pauseEvent;
 
     #endregion
 
@@ -36,17 +39,35 @@ public class UI : MonoBehaviour
         restart.onClick.AddListener(OnRestart);
         pause.onClick.AddListener(OnPause);
         play.onClick.AddListener(OnPlay);
-        timeBar.onValueChanged.AddListener(OnTimeBarChangeValue);
+
+        // does OnTimeBarChangeValue EVERY FRAME :)
+        // disable for lags
+        // timeBar.onValueChanged.AddListener(OnTimeBarChangeValue);
+
+        // Must have event trigger component on the scrollbar
+        EventTrigger trigger = timeBar.GetComponent<EventTrigger>();
+        EventTrigger.Entry entry = new EventTrigger.Entry();
+        entry.eventID = EventTriggerType.PointerUp;
+        entry.callback.AddListener((data) => { OnTimeBarChangeValue(timeBar.value); });
+        trigger.triggers.Add(entry);
     }
 
     void Start() {
+        GlobalTime.Time = 0;
         timeChangeEvent = new GoToTimeState();
+        pauseEvent = new PauseEvent();
+
+        EventManager.AddTimeChangeInvoker(this);
+        EventManager.AddPauseTimeInvoker(this);
     }
 
     void Update()
     {
-        timePassed += Time.deltaTime;
-        timeCounter.text = "Playback time: " + timePassed.ToString("0.00");
+        if (!paused)
+        {
+            GlobalTime.Time += Time.deltaTime;
+            timeCounter.text = "Playback time: " + GlobalTime.Time.ToString("0.0");
+        }
     }
 
     /// <summary>
@@ -62,11 +83,7 @@ public class UI : MonoBehaviour
     /// </summary>
     void OnPause()
     {
-        restart.gameObject.SetActive(false);
-        pause.gameObject.SetActive(false);
-        play.gameObject.SetActive(true);
-        timeBar.gameObject.SetActive(true);
-        Time.timeScale = 0;
+        Pause();
     }
 
     /// <summary>
@@ -74,11 +91,27 @@ public class UI : MonoBehaviour
     /// Hides pause menu
     /// </summary>
     void OnPlay() {
-        restart.gameObject.SetActive(true);
-        pause.gameObject.SetActive(true);
-        play.gameObject.SetActive(false);
-        timeBar.gameObject.SetActive(false);
-        Time.timeScale = 1;
+        timeBar.value = 1;
+        if (tempGlobalTime > 0) GlobalTime.Time = tempGlobalTime;
+        
+        Pause();
+    }
+
+    /// <summary>
+    /// Handles showing and hiding UI elements
+    /// 
+    /// Also re-creates the pause event for future use
+    /// </summary>
+    void Pause() {
+        restart.gameObject.SetActive(paused);
+        pause.gameObject.SetActive(paused);
+        play.gameObject.SetActive(!paused);
+        timeBar.gameObject.SetActive(!paused);
+
+        paused = !paused;
+        pauseEvent.Invoke();
+        pauseEvent = new PauseEvent();
+        EventManager.AddPauseTimeInvoker(this);
     }
 
     /// <summary>
@@ -86,9 +119,17 @@ public class UI : MonoBehaviour
     /// </summary>
     /// <param name="value">float</param>
     void OnTimeBarChangeValue(float value) {
-        print("Hello world");
-        timeChangeEvent.Invoke(value);
-        timeChangeEvent = new GoToTimeState();
+        if (!Input.GetMouseButton(0))
+        {
+            float timeStamp = GlobalTime.Time * value;
+            timeStamp = float.Parse(timeStamp.ToString("0.0"));
+            timeChangeEvent.Invoke(timeStamp);
+            // print("timeStamp " + timeStamp);
+            timeChangeEvent = new GoToTimeState();
+            EventManager.AddTimeChangeInvoker(this);
+            tempGlobalTime = timeStamp;
+            timeCounter.text = "Playback time: " + timeStamp.ToString("0.0");
+        }
     }
 
     /// <summary>
@@ -97,6 +138,15 @@ public class UI : MonoBehaviour
     /// <param name=""></param>
     public void AddTimeChangeListener(UnityAction<float> listener) {
         timeChangeEvent.AddListener(listener);
+    }
+
+    /// <summary>
+    /// Add the listener to pause / unpause the game
+    /// </summary>
+    /// <param name=""></param>
+    public void AddPauseTimeListener(UnityAction listener)
+    {
+        pauseEvent.AddListener(listener);
     }
 
     #endregion

@@ -14,7 +14,7 @@ public class AttackZone : MonoBehaviour
 
     #region Methods
 
-    public void Start() {
+    public void Awake() {
         zone = GetComponent<SphereCollider>();
         cannon = GetComponentInParent<Cannon>();
     }
